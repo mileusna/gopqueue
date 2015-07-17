@@ -5,8 +5,10 @@
 // Addition to original package, this package adds method and
 // other internals for inserting only unique items in queue
 //
+// Copyright (C) 2015 by Milos Mileusnic <milos@groowe.com>
+//
 // Copyright (C) 2011 by Krzysztof Kowalik <chris@nu7hat.ch>
-package mungos
+package pqueue
 
 import (
 	"container/heap"
