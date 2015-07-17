@@ -46,7 +46,7 @@ type Queue struct {
 // New creates and initializes a new priority queue, taking
 // a limit as a parameter. If 0 given, then queue will be
 // unlimited. 
-func NewQueue(max int) (q *Queue) {
+func New(max int) (q *Queue) {
 	var locker sync.Mutex
 	q = &Queue{Limit: max}
 	q.history = make(map[interface{}]struct{}, 0);

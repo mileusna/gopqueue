@@ -4,41 +4,50 @@ Priority Queue in Go
 This package provides a priority queue implementation and scaffold
 interfaces.
 
+Additional to original package, you can enqueue only items which haven't
+been already enqueued
+
 Installation
 ------------
-Use the `goinstall` tool:
-
-	$ goinstall github.com/nu7hatch/gopqueue
-
-... or install it manually:
-
-	$ git clone git://github.com/nu7hatch/gopqueue.git
-	$ cd gopqueue
-	$ make install
+	$ go get github.com/mileusna/gopqueue
 
 Usage
 -----
 Here's trivial example of the fast queue usage:
+Hope to post more examples soon
 
 	package main
 
-	import pqueue "github.com/nu7hatch/gopqueue"
+	import pqueue "github.com/mileusna/gopqueue"
 	
 	type Task struct {
 	    Name     string
 	    priority int
 	}
 
+	// interface functions for queue items
 	func (t *Task) Less(other interface{}) bool {
 	    return t.priority < other.(*Task).priority
+	}
+
+	// this should return unique id from struct
+	// to check weather item has already been into queue
+	func (t *Task) Id() interface{} {
+		return t.Name
 	}
 	
 	func main() {
 	    q := pqueue.New(0)
-	    q.Enqueue(&Task{"one", 10})
-	    q.Enqueue(&Task{"two", 2})
-	    q.Enqueue(&Task{"three", 5})
-	    q.Enqueue(&Task{"four", 7})
+	    q.EnqueueUnique(&Task{"one", 10})
+	    q.EnqueueUnique(&Task{"two", 2})
+	    q.EnqueueUnique(&Task{"three", 5})
+	    q.EnqueueUnique(&Task{"four", 7})
+	    q.EnqueueUnique(&Task{"two", 5})
+	    q.EnqueueUnique(&Task{"two", 6})
+	    q.EnqueueUnique(&Task{"two", 7})
+	    q.EnqueueUnique(&Task{"two", 8})
+
+	    println(q.Len())	// there will be only 4 items in queue
 
 	    for i := 0; i < 4; i += 1 {
 	        task := q.Dequeue()
@@ -47,7 +56,7 @@ Here's trivial example of the fast queue usage:
 	}
 
 	// Produces:
-	//
+	//	   4
 	//     two
 	//     three
 	//     four
@@ -57,6 +66,7 @@ For more information and examples check the package documentation.
 	
 Copyright
 ---------
+Copyright (C) 2015 by Milos Mileusnic <milos@groowe.com>
 Copyright (C) 2011 by Krzysztof Kowalik <chris@nu7hat.ch>
 
 See COPYING file for details.
