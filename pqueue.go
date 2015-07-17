@@ -1,8 +1,12 @@
+
 // This package provides a priority queue implementation and
 // scaffold interfaces.
 //
+// Addition to original package, this package adds method and
+// other internals for inserting only unique items in queue
+//
 // Copyright (C) 2011 by Krzysztof Kowalik <chris@nu7hat.ch>
-package pqueue
+package mungos
 
 import (
 	"container/heap"
@@ -12,8 +16,9 @@ import (
 
 // Only items implementing this interface can be enqueued
 // on the priority queue.
-type Interface interface {
+type QueueItem interface {
 	Less(other interface{}) bool
+	Id() interface{}
 }
 
 // Queue is a threadsafe priority queue exchange. Here's
@@ -33,6 +38,7 @@ type Interface interface {
 //
 type Queue struct {
 	Limit int
+	history map[interface{}]struct{}
 	items *sorter
 	cond  *sync.Cond
 }
@@ -40,9 +46,10 @@ type Queue struct {
 // New creates and initializes a new priority queue, taking
 // a limit as a parameter. If 0 given, then queue will be
 // unlimited. 
-func New(max int) (q *Queue) {
+func NewQueue(max int) (q *Queue) {
 	var locker sync.Mutex
 	q = &Queue{Limit: max}
+	q.history = make(map[interface{}]struct{}, 0);
 	q.items = new(sorter)
 	q.cond = sync.NewCond(&locker)
 	heap.Init(q.items)
@@ -50,29 +57,67 @@ func New(max int) (q *Queue) {
 }
 
 // Enqueue puts given item to the queue.
-func (q *Queue) Enqueue(item Interface) (err error) {
+// Lock the queue and calls enqueue()
+func (q *Queue) Enqueue(item QueueItem) (err error) {
 	q.cond.L.Lock()
 	defer q.cond.L.Unlock()
+	return q.enqueue(item)
+}
+
+// Enqueue puts given item to the queue.
+func (q *Queue) enqueue(item QueueItem) (err error) {
 	if q.Limit > 0 && q.Len() >= q.Limit {
 		return errors.New("Queue limit reached")
 	}
+	q.history[item.Id()] = struct{}{};
 	heap.Push(q.items, item)
 	q.cond.Signal()
 	return
 }
 
+// check if item already exists in queue (or it has been into queue)
+func (q *Queue) Exists(item QueueItem) bool {
+	q.cond.L.Lock()
+	defer q.cond.L.Unlock()
+	return q.exists(item)
+}
+
+func (q *Queue) exists(item QueueItem) bool {
+	if _, ok := q.history[item.Id()]; ok {
+		return true;
+	} else {
+		return false;
+	}
+}
+
+
+// Enqueue puts item in queue only if it hasn't already been in queue
+func (q *Queue) EnqueueUnique(item QueueItem) (err error) {
+	q.cond.L.Lock()
+	defer q.cond.L.Unlock()
+	if !q.exists(item) {
+		q.enqueue(item)
+	}
+	return
+}
+
+
+
 // Dequeue takes an item from the queue. If queue is empty
 // then should block waiting for at least one item.
-func (q *Queue) Dequeue() (item Interface) {
+func (q *Queue) Dequeue() (item QueueItem) {
 	q.cond.L.Lock()	
-start:
-	x := heap.Pop(q.items)
-	if x == nil {
-		q.cond.Wait()
-		goto start
+	defer q.cond.L.Unlock()
+	var x interface{}
+	for {
+		x = heap.Pop(q.items)
+		if x == nil {
+			q.cond.Wait()
+		} else {
+			break
+		}
 	}
-	q.cond.L.Unlock()
-	item = x.(Interface)
+	item = x.(QueueItem)
 	return
 }
 
@@ -94,10 +139,10 @@ func (q *Queue) IsEmpty() bool {
 	return q.Len() == 0
 }
 
-type sorter []Interface
+type sorter []QueueItem
 
 func (s *sorter) Push(i interface{}) {
-	item, ok := i.(Interface)
+	item, ok := i.(QueueItem)
 	if !ok {
 		return
 	}
