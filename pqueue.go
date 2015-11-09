@@ -1,4 +1,3 @@
-
 // This package provides a priority queue implementation and
 // scaffold interfaces.
 //
@@ -39,19 +38,19 @@ type QueueItem interface {
 //     }
 //
 type Queue struct {
-	Limit int
+	Limit   int
 	history map[interface{}]struct{}
-	items *sorter
-	cond  *sync.Cond
+	items   *sorter
+	cond    *sync.Cond
 }
 
 // New creates and initializes a new priority queue, taking
 // a limit as a parameter. If 0 given, then queue will be
-// unlimited. 
+// unlimited.
 func New(max int) (q *Queue) {
 	var locker sync.Mutex
 	q = &Queue{Limit: max}
-	q.history = make(map[interface{}]struct{}, 0);
+	q.history = make(map[interface{}]struct{}, 0)
 	q.items = new(sorter)
 	q.cond = sync.NewCond(&locker)
 	heap.Init(q.items)
@@ -71,44 +70,64 @@ func (q *Queue) enqueue(item QueueItem) (err error) {
 	if q.Limit > 0 && q.Len() >= q.Limit {
 		return errors.New("Queue limit reached")
 	}
-	q.history[item.Id()] = struct{}{};
+	q.history[item.Id()] = struct{}{}
 	heap.Push(q.items, item)
 	q.cond.Signal()
 	return
 }
 
 // check if item already exists in queue (or it has been into queue)
-func (q *Queue) Exists(item QueueItem) bool {
+func (q *Queue) ItemExists(item QueueItem) bool {
 	q.cond.L.Lock()
 	defer q.cond.L.Unlock()
-	return q.exists(item)
+	return q.idExists(item.Id())
 }
 
-func (q *Queue) exists(item QueueItem) bool {
-	if _, ok := q.history[item.Id()]; ok {
-		return true;
+func (q *Queue) IdExists(id interface{}) bool {
+	q.cond.L.Lock()
+	defer q.cond.L.Unlock()
+	return q.idExists(id)
+}
+
+func (q *Queue) idExists(id interface{}) bool {
+	if _, ok := q.history[id]; ok {
+		return true
 	} else {
-		return false;
+		return false
 	}
 }
 
-
 // Enqueue puts item in queue only if it hasn't already been in queue
-func (q *Queue) EnqueueUnique(item QueueItem) (err error) {
+func (q *Queue) EnqueueUnique(item QueueItem) (added bool, err error) {
 	q.cond.L.Lock()
 	defer q.cond.L.Unlock()
-	if !q.exists(item) {
-		q.enqueue(item)
+	if !q.idExists(item.Id()) {
+		err = q.enqueue(item)
+		added = true
 	}
 	return
 }
 
+/*
+	Clear queue history so the elements can be EnqueueUnique again
+*/
+func (q *Queue) ClearHistory() {
+	q.cond.L.Lock()
+	defer q.cond.L.Unlock()
+	q.history = nil
+	q.history = make(map[interface{}]struct{}, 0)
+}
 
+func (q *Queue) RemoveFromHistory(element interface{}) {
+	q.cond.L.Lock()
+	defer q.cond.L.Unlock()
+	delete(q.history, element)
+}
 
 // Dequeue takes an item from the queue. If queue is empty
 // then should block waiting for at least one item.
 func (q *Queue) Dequeue() (item QueueItem) {
-	q.cond.L.Lock()	
+	q.cond.L.Lock()
 	defer q.cond.L.Unlock()
 	var x interface{}
 	for {
@@ -153,7 +172,7 @@ func (s *sorter) Push(i interface{}) {
 
 func (s *sorter) Pop() (x interface{}) {
 	if s.Len() > 0 {
-		l := s.Len()-1
+		l := s.Len() - 1
 		x = (*s)[l]
 		(*s)[l] = nil
 		*s = (*s)[:l]
